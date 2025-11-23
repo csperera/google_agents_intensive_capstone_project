@@ -3,7 +3,7 @@ AI-Powered Fraud Detection Agent
 =================================
 Combines XGBoost predictions with LLM explainability for credit card fraud analysis.
 
-Author: Cristian Perera
+Authors: Cristian Perera & Ash Dehghan Ph.D
 Date: November 2025
 """
 
@@ -13,7 +13,8 @@ from openai import OpenAI
 from typing import Dict, Optional
 from pathlib import Path
 import sys
-
+import os
+import joblib
 
 class FraudAgent:
     """
