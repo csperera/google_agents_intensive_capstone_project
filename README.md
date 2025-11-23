@@ -228,9 +228,10 @@ MIT License - See [LICENSE](LICENSE) for details
 
 ## 📧 Contact
 
-**Cristian Perera**  
+**Cristian Perera or Ash Dehghan Ph.D**  
 [Your LinkedIn] • [Your Email] • [Your Portfolio]
 
 ---
 
 *Built with ❤️ for explainable, production-ready fraud detection*
+
