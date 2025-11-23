@@ -4,6 +4,11 @@ import numpy as np
 import joblib
 import xgboost as xgb
 from openai import OpenAI
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Page config
 st.set_page_config(
@@ -15,21 +20,44 @@ st.set_page_config(
 # Load model (cached)
 @st.cache_resource
 def load_model():
-    return joblib.load("xgboost_fraud_model.pkl")
+    # Try different possible locations
+    possible_paths = [
+        "models/xgboost_fraud_model.pkl",
+        "../models/xgboost_fraud_model.pkl",
+        "xgboost_fraud_model.pkl"
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return joblib.load(path)
+    
+    raise FileNotFoundError(
+        "Model file not found. Please run 'python src/model.py' to train the model first."
+    )
 
 # Initialize OpenRouter client
 @st.cache_resource
 def get_client():
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "OPENROUTER_API_KEY not found in environment variables.\n"
+            "Please set it in your .env file or environment."
+        )
     return OpenAI(
         base_url="https://openrouter.ai/api/v1",
-        api_key="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"
+        api_key=api_key
     )
 
 try:
     model = load_model()
     client = get_client()
-except:
-    st.error("⚠️ Model file not found. Make sure 'xgboost_fraud_model.pkl' is in the same directory.")
+except ValueError as e:
+    st.error(f"⚠️ Configuration Error: {str(e)}")
+    st.info("💡 To fix this: Create a `.env` file with `OPENROUTER_API_KEY=your-key-here`")
+    st.stop()
+except Exception as e:
+    st.error(f"⚠️ Error loading resources: {str(e)}")
     st.stop()
 
 # Header

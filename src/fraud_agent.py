@@ -15,6 +15,11 @@ from pathlib import Path
 import sys
 import os
 import joblib
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 
 class FraudAgent:
     """
@@ -201,9 +206,6 @@ def create_agent_from_model_path(
     Returns:
         Initialized FraudAgent instance
     """
-    import joblib
-    import os
-    
     if api_key is None:
         api_key = os.getenv("OPENROUTER_API_KEY")
         if api_key is None:
@@ -219,7 +221,14 @@ if __name__ == "__main__":
     """
     Demo: Run agent analysis on random fraud vs safe cases.
     """
-    import joblib
+    # Load API key from environment
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "OPENROUTER_API_KEY not found in environment variables.\n"
+            "Set it with: export OPENROUTER_API_KEY='your-key-here'\n"
+            "Or add it to your .env file"
+        )
     
     # Load model
     model = joblib.load("models/xgboost_fraud_model.pkl")
@@ -230,8 +239,7 @@ if __name__ == "__main__":
     X_test = test.drop("Class", axis=1)
     y_test = test["Class"]
     
-    # Create agent with your API key
-    api_key = "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"
+    # Create agent
     agent = FraudAgent(model, api_key)
     
     # Select random cases
