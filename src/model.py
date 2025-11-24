@@ -40,20 +40,24 @@ class FraudDetectionModel:
     def load_and_split_data(
         self, 
         data_path: str, 
-        train_size: int = 227845
+        train_ratio: float = 0.8
     ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
         """
         Load credit card data and perform temporal train/test split.
         
         Args:
             data_path: Path to creditcard.csv file
-            train_size: Number of samples for training (default maintains 80/20 split)
+            train_ratio: Percentage of data for training (default 0.8 = 80% train, 20% test)
             
         Returns:
             Tuple of (X_train, y_train, X_test, y_test)
         """
         df = pd.read_csv(data_path)
         print(f"Loaded {len(df):,} transactions | {df['Class'].sum()} frauds")
+        
+        # Calculate train size from percentage
+        train_size = int(len(df) * train_ratio)
+        print(f"Split: {train_ratio:.0%} train ({train_size:,} rows) | {1-train_ratio:.0%} test ({len(df)-train_size:,} rows)")
         
         # Temporal split (no shuffle - simulates real deployment)
         train = df.iloc[:train_size]

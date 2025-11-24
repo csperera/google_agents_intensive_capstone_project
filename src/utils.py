@@ -106,7 +106,7 @@ def get_random_test_cases(
     return fraud_cases, safe_cases
 
 
-def load_api_key(env_var: str = "OPENROUTER_API_KEY") -> str:
+def load_api_key(env_var: str = "GOOGLE_AI_API_KEY") -> str:
     """
     Load API key from environment variable.
     

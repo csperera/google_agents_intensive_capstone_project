@@ -2,258 +2,285 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
-import xgboost as xgb
-from openai import OpenAI
+import time
 import os
 from dotenv import load_dotenv
+from google import genai
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
-# Page config
+# Page config - full width, no sidebar
 st.set_page_config(
-    page_title="Fraud Detection Simulator",
-    page_icon="💳",
-    layout="wide"
+    page_title="Fraud Detection Monitor",
+    page_icon="🚨",
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# Load model (cached)
+# Hide sidebar completely
+st.markdown("""
+    <style>
+        [data-testid="collapsedControl"] {display: none}
+        .block-container {padding-top: 2rem; padding-left: 1rem; padding-right: 1rem;}
+    </style>
+""", unsafe_allow_html=True)
+
+# Load model and data
 @st.cache_resource
-def load_model():
-    # Try different possible locations
-    possible_paths = [
-        "models/xgboost_fraud_model.pkl",
+def load_resources():
+    # Try different possible model paths
+    possible_model_paths = [
         "../models/xgboost_fraud_model.pkl",
+        "models/xgboost_fraud_model.pkl",
         "xgboost_fraud_model.pkl"
     ]
     
-    for path in possible_paths:
+    model = None
+    for path in possible_model_paths:
         if os.path.exists(path):
-            return joblib.load(path)
+            model = joblib.load(path)
+            break
     
-    raise FileNotFoundError(
-        "Model file not found. Please run 'python src/model.py' to train the model first."
-    )
+    if model is None:
+        raise FileNotFoundError(
+            "Model file not found. Please run 'python src/model.py' to train the model first."
+        )
+    
+    # Load test data (try relative paths)
+    possible_data_paths = [
+        "../data/creditcard.csv",
+        "data/creditcard.csv",
+        r"C:\Users\chris\google_agents_intensive_capstone_project\data\creditcard.csv"
+    ]
+    
+    df = None
+    for path in possible_data_paths:
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            break
+    
+    if df is None:
+        raise FileNotFoundError("Credit card dataset not found. Please check data/creditcard.csv")
+    
+    train = df.iloc[:227845]
+    test = df.iloc[227845:]
+    X_test = test.drop("Class", axis=1)
+    y_test = test["Class"]
+    return model, X_test, y_test
 
-# Initialize OpenRouter client
 @st.cache_resource
-def get_client():
-    api_key = os.getenv("OPENROUTER_API_KEY")
+def get_ai_client():
+    api_key = os.getenv("GOOGLE_AI_API_KEY")
     if not api_key:
         raise ValueError(
-            "OPENROUTER_API_KEY not found in environment variables.\n"
-            "Please set it in your .env file or environment."
+            "GOOGLE_AI_API_KEY not found in .env file.\n"
+            "Get your API key from: https://aistudio.google.com/"
         )
-    return OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key
-    )
+    return genai.Client(api_key=api_key)
 
 try:
-    model = load_model()
-    client = get_client()
-except ValueError as e:
-    st.error(f"⚠️ Configuration Error: {str(e)}")
-    st.info("💡 To fix this: Create a `.env` file with `OPENROUTER_API_KEY=your-key-here`")
-    st.stop()
+    model, X_test, y_test = load_resources()
+    client = get_ai_client()
 except Exception as e:
-    st.error(f"⚠️ Error loading resources: {str(e)}")
+    st.error(f"⚠️ Error loading resources: {e}")
     st.stop()
 
-# Header
-st.title("💳 Real-Time Fraud Detection Simulator")
-st.markdown("Enter transaction details below to get instant AI-powered fraud analysis")
-st.divider()
+# Initialize session state
+if 'monitoring' not in st.session_state:
+    st.session_state.monitoring = False
+if 'current_index' not in st.session_state:
+    st.session_state.current_index = 0
+if 'fraud_detected' not in st.session_state:
+    st.session_state.fraud_detected = False
+if 'fraud_data' not in st.session_state:
+    st.session_state.fraud_data = None
+if 'total_processed' not in st.session_state:
+    st.session_state.total_processed = 0
+if 'fraud_count' not in st.session_state:
+    st.session_state.fraud_count = 0
 
-# Sidebar for input
-with st.sidebar:
-    st.header("📝 Transaction Input")
-    
-    # Sliders
-    amount = st.slider(
-        "Transaction Amount ($)",
-        min_value=0.0,
-        max_value=500.0,
-        value=125.5,
-        step=0.5,
-        help="Amount in dollars"
-    )
-    
-    time_hours = st.slider(
-        "Time (hours since first transaction)",
-        min_value=0,
-        max_value=48,
-        value=12,
-        help="Time elapsed in hours"
-    )
-    
-    v14 = st.slider(
-        "V14 (PCA Feature)",
-        min_value=-10.0,
-        max_value=10.0,
-        value=-2.5,
-        step=0.1,
-        help="Principal component 14"
-    )
-    
-    v17 = st.slider(
-        "V17 (PCA Feature)",
-        min_value=-10.0,
-        max_value=10.0,
-        value=-1.8,
-        step=0.1,
-        help="Principal component 17"
-    )
-    
-    st.divider()
-    
-    # Buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("🎲 Random", use_container_width=True):
-            # Generate random transaction
-            is_fraud = np.random.random() > 0.5
-            if is_fraud:
-                st.session_state.amount = np.random.uniform(0.5, 50.0)
-                st.session_state.v14 = np.random.uniform(-10, -2)
-                st.session_state.v17 = np.random.uniform(-10, -2)
-            else:
-                st.session_state.amount = np.random.uniform(20.0, 300.0)
-                st.session_state.v14 = np.random.uniform(-2, 2)
-                st.session_state.v17 = np.random.uniform(-2, 2)
-            st.session_state.time_hours = np.random.randint(0, 48)
-            st.rerun()
-    
+# Header with ticker in top right
+header_col1, header_col2 = st.columns([3, 1])
+with header_col1:
+    st.title("🚨 Real-Time Credit Card Fraud Detection Agent")
+with header_col2:
+    # Ticker placeholder for top right
+    ticker_placeholder = st.empty()
+    if 'ticker_display' not in st.session_state:
+        st.session_state.ticker_display = ""
+
+st.markdown("---")
+
+# Main button logic
+if not st.session_state.monitoring and not st.session_state.fraud_detected:
+    # Show big START button
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        analyze_btn = st.button("🔍 Analyze", type="primary", use_container_width=True)
+        if st.button("🚨 BEGIN FRAUD DETECTION", type="primary", use_container_width=True):
+            st.session_state.monitoring = True
+            st.session_state.current_index = 0
+            st.session_state.total_processed = 0
+            st.session_state.fraud_count = 0
+            st.rerun()
 
-# Use session state values if they exist
-if 'amount' in st.session_state:
-    amount = st.session_state.amount
-if 'time_hours' in st.session_state:
-    time_hours = st.session_state.time_hours
-if 'v14' in st.session_state:
-    v14 = st.session_state.v14
-if 'v17' in st.session_state:
-    v17 = st.session_state.v17
-
-# Create transaction dictionary with all required features
-# CRITICAL: Order must match training data (Amount comes LAST)
-transaction = {
-    'Time': time_hours * 3600,
-    'V1': 0, 'V2': 0, 'V3': 0, 'V4': 0, 'V5': 0,
-    'V6': 0, 'V7': 0, 'V8': 0, 'V9': 0, 'V10': 0,
-    'V11': 0, 'V12': 0, 'V13': 0, 'V14': v14, 'V15': 0,
-    'V16': 0, 'V17': v17, 'V18': 0, 'V19': 0, 'V20': 0,
-    'V21': 0, 'V22': 0, 'V23': 0, 'V24': 0, 'V25': 0,
-    'V26': 0, 'V27': 0, 'V28': 0,
-    'Amount': amount  # Amount must be LAST
-}
-
-# Make prediction
-df_transaction = pd.DataFrame([transaction])
-fraud_prob = model.predict_proba(df_transaction)[0][1]
-
-# Determine risk level
-if fraud_prob > 0.95:
-    risk_level = "🔴 EXTREMELY HIGH - BLOCK IMMEDIATELY"
-    risk_color = "red"
-elif fraud_prob > 0.70:
-    risk_level = "🟠 HIGH - ALERT & MANUAL REVIEW"
-    risk_color = "orange"
-elif fraud_prob > 0.30:
-    risk_level = "🟡 MEDIUM - MONITOR CLOSELY"
-    risk_color = "yellow"
-else:
-    risk_level = "🟢 LOW - SAFE"
-    risk_color = "green"
-
-# Main content area
-col1, col2 = st.columns([1, 1])
-
-with col1:
-    st.subheader("🎯 Fraud Risk Assessment")
+elif st.session_state.fraud_detected:
+    # Show fraud alert and analysis
+    st.error("🚨 FRAUD DETECTED - MONITORING PAUSED")
     
-    # Metric display
-    st.metric(
-        label="Fraud Probability",
-        value=f"{fraud_prob:.1%}",
-        delta=None
-    )
+    fraud_tx = st.session_state.fraud_data['transaction']
+    fraud_prob = st.session_state.fraud_data['probability']
     
-    # Progress bar colored by risk
-    st.progress(float(fraud_prob))
+    # Display fraud details
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Card Number", f"**** **** **** {np.random.randint(1000, 9999)}")
+    with col2:
+        st.metric("Amount", f"${fraud_tx['Amount']:.2f}")
+    with col3:
+        st.metric("Fraud Score", f"{fraud_prob:.1%}")
+    
+    # Determine risk level
+    if fraud_prob > 0.95:
+        risk_level = "🔴 EXTREMELY HIGH - BLOCK IMMEDIATELY"
+    elif fraud_prob > 0.70:
+        risk_level = "🟠 HIGH - ALERT & MANUAL REVIEW"
+    else:
+        risk_level = "🟡 MEDIUM - MONITOR CLOSELY"
     
     st.markdown(f"**Risk Level:** {risk_level}")
-    st.markdown(f"**Confidence:** {max(fraud_prob, 1-fraud_prob):.1%}")
+    st.markdown("---")
     
-    st.divider()
+    # AI Analysis
+    st.subheader("🤖 AI Fraud Agent Report")
     
-    # Feature impact (simplified)
-    st.subheader("📊 Feature Impact")
-    
-    # Calculate relative impacts (simplified for demo)
-    v14_impact = min(abs(v14) / 10, 1.0)
-    v17_impact = min(abs(v17) / 10, 1.0)
-    amount_impact = min(amount / 500, 0.5)
-    time_impact = 0.1
-    
-    st.progress(v14_impact, text=f"V14 Value: {v14_impact:.0%} impact")
-    st.progress(v17_impact, text=f"V17 Value: {v17_impact:.0%} impact")
-    st.progress(amount_impact, text=f"Amount: {amount_impact:.0%} impact")
-    st.progress(time_impact, text=f"Time: {time_impact:.0%} impact")
+    if 'ai_analysis' not in st.session_state:
+        with st.spinner("🔍 AI analyzing transaction patterns..."):
+            # Create prompt
+            prompt = f"""You are a machine learning model explainer analyzing fraud detection outputs.
 
-with col2:
-    st.subheader("🤖 AI Fraud Analyst")
-    
-    if analyze_btn or 'last_analysis' not in st.session_state:
-        with st.spinner("Analyzing transaction..."):
-            # Create prompt for AI
-            prompt = f"""You are an elite fraud detection analyst.
+A fraud detection model flagged this transaction as fraudulent:
+- Transaction Amount: ${fraud_tx['Amount']:.2f}
+- Time Since First Transaction: {fraud_tx['Time']//3600:.0f} hours
+- Feature V14 (PCA component): {fraud_tx['V14']:.2f}
+- Feature V17 (PCA component): {fraud_tx['V17']:.2f}
+- Model's Fraud Probability Score: {fraud_prob:.1%}
 
-Analyze this transaction:
-- Amount: ${amount:.2f}
-- Time: {time_hours}h since first transaction
-- V14: {v14:.2f}
-- V17: {v17:.2f}
-- Fraud Probability: {fraud_prob:.1%}
+Provide a detailed fraud analysis (4-5 sentences) explaining:
+1. Why this transaction is highly suspicious
+2. What specific patterns triggered the high fraud score
+3. What the V14 and V17 values indicate about fraudulent behavior
+4. What action should be taken
 
-Provide a concise explanation (3-4 sentences) of:
-1. Why this transaction received this fraud score
-2. What patterns the model detected
-3. Your recommendation (approve/review/block)
+This is for an educational Google Capstone project demonstrating AI-powered fraud detection."""
 
-Be specific about the V14 and V17 values and their significance."""
-
-            # Try models
-            free_models = [
-                "meta-llama/llama-3.2-3b-instruct:free",
-                "google/gemma-2-9b-it:free",
-                "mistralai/mistral-7b-instruct:free",
+            # Try Google models (must include 'models/' prefix)
+            google_models = [
+                'models/gemini-2.5-flash',
+                'models/gemini-2.5-pro-preview-06-05',
+                'models/gemini-2.5-pro-preview-05-06',
+                'models/gemini-2.5-pro-preview-03-25',
+                'models/gemini-1.5-flash',
+                'models/gemini-1.5-pro'
             ]
-            
+
             analysis = None
-            for model_name in free_models:
+            for model_name in google_models:
                 try:
-                    response = client.chat.completions.create(
+                    response = client.models.generate_content(
                         model=model_name,
-                        messages=[{"role": "user", "content": prompt}],
-                        temperature=0.2
+                        contents=prompt
                     )
-                    analysis = response.choices[0].message.content
+                    analysis = response.text
                     break
                 except:
                     continue
             
             if analysis:
-                st.session_state.last_analysis = analysis
+                st.session_state.ai_analysis = analysis
             else:
-                st.session_state.last_analysis = "AI analysis unavailable. Please check your API connection."
+                st.session_state.ai_analysis = "AI analysis unavailable. Manual review required."
     
     # Display analysis
-    if 'last_analysis' in st.session_state:
-        st.markdown(st.session_state.last_analysis)
+    st.markdown(st.session_state.ai_analysis)
+    st.markdown("---")
+    
+    # Resume button (with unique key to prevent duplication)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("▶ RESUME MONITORING", type="primary", use_container_width=True, key="resume_monitoring_btn"):
+            st.session_state.fraud_detected = False
+            st.session_state.monitoring = True
+            st.session_state.fraud_data = None
+            if 'ai_analysis' in st.session_state:
+                del st.session_state.ai_analysis
+            st.rerun()
+
+elif st.session_state.monitoring:
+    # Active monitoring - process transactions
+    st.success("✅ MONITORING ACTIVE - Processing transactions...")
+    
+    # Stats display
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Transactions Processed", st.session_state.total_processed)
+    with col2:
+        st.metric("Frauds Detected", st.session_state.fraud_count)
+    with col3:
+        st.metric("Processing Speed", "20 tx/sec")
+    
+    # Process transactions
+    for i in range(10):  # Process 10 at a time
+        if st.session_state.current_index >= len(X_test):
+            st.session_state.current_index = 0  # Loop back
+        
+        # Get transaction
+        tx = X_test.iloc[st.session_state.current_index]
+        actual_label = y_test.iloc[st.session_state.current_index]
+        
+        # Predict
+        prob = model.predict_proba(tx.values.reshape(1, -1))[0][1]
+        
+        # Update ticker in top right with huge font
+        card_num = f"**** {np.random.randint(1000, 9999)}"
+        status = "✅" if prob < 0.95 else "🚨"
+        ticker_html = f"""
+        <div style="text-align: right; font-size: 3rem; font-weight: bold; padding: 10px;">
+            💳 {card_num}<br>
+            ${tx['Amount']:.2f} {status}
+        </div>
+        """
+        ticker_placeholder.markdown(ticker_html, unsafe_allow_html=True)
+        
+        st.session_state.total_processed += 1
+        st.session_state.current_index += 1
+        
+        # Check for fraud
+        if prob > 0.95:
+            # FRAUD DETECTED!
+            st.session_state.fraud_detected = True
+            st.session_state.monitoring = False
+            st.session_state.fraud_count += 1
+            st.session_state.fraud_data = {
+                'transaction': tx.to_dict(),
+                'probability': prob
+            }
+            
+            # Play alarm sound
+            st.markdown("""
+                <audio autoplay>
+                    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSA0PVa3n7qlXEwpBmuL0wm0gBjKM0vPVgzQGH2q/7uGaTRANUqzk7qVUEgw+lODzvWsgBzWS1PPZgjIGH2q/7uCZThENUark7qRUEQw9lODztmwiBjiM0vPXgzIFIG7A7uCZTQ4NUark7qRUEgtAmeD0t2wiBjiR1fPYgjQGIG6/7+GaTQ8MUqvm7qVUEwxBl+D0uG4iB" type="audio/wav">
+                </audio>
+            """, unsafe_allow_html=True)
+            
+            time.sleep(0.2)  # Brief pause for fraud alert
+            st.rerun()
+        
+        time.sleep(0.05)  # 20 tx/sec (1/20 = 0.05 seconds per transaction)
+    
+    # Continue monitoring
+    st.rerun()
 
 # Footer
-st.divider()
-st.caption("🎓 Capstone Project: AI-Powered Credit Card Fraud Detection | XGBoost Model (AUC: 0.9886)")
+st.markdown("---")
+st.caption("🎓 Google Capstone Project: AI-Powered Credit Card Fraud Detection | XGBoost Model (AUC: 0.9886)")

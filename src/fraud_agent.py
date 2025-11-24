@@ -9,7 +9,7 @@ Date: November 2025
 
 import pandas as pd
 import textwrap
-from openai import OpenAI
+from google import genai
 from typing import Dict, Optional
 from pathlib import Path
 import sys
@@ -27,12 +27,15 @@ class FraudAgent:
     ML predictions with LLM-generated explanations.
     """
     
-    # Free-tier LLM models (in priority order)
+    # Google AI Studio models (in priority order for failover)
+    # Note: Model names must include the 'models/' prefix
     FREE_MODELS = [
-        "meta-llama/llama-3.2-3b-instruct:free",
-        "google/gemma-2-9b-it:free",
-        "mistralai/mistral-7b-instruct:free",
-        "qwen/qwen-2-7b-instruct:free"
+        'models/gemini-2.5-flash',                    # Fast, reliable (confirmed available)
+        'models/gemini-2.5-pro-preview-06-05',       # Latest preview (confirmed available)
+        'models/gemini-2.5-pro-preview-05-06',       # Previous preview
+        'models/gemini-2.5-pro-preview-03-25',       # Older preview
+        'models/gemini-1.5-flash',                    # Stable fallback
+        'models/gemini-1.5-pro'                       # More capable fallback
     ]
     
     def __init__(self, model, api_key: str):
@@ -41,13 +44,10 @@ class FraudAgent:
         
         Args:
             model: Trained XGBoost model instance
-            api_key: OpenRouter API key
+            api_key: Google AI Studio API key
         """
         self.model = model
-        self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key
-        )
+        self.client = genai.Client(api_key=api_key)
         
     def xgboost_fraud_score(self, transaction: Dict) -> str:
         """
@@ -88,7 +88,7 @@ Top Features:
         fraud_transaction: pd.Series,
         safe_transaction: pd.Series,
         temperature: float = 0.2,
-        max_retries: int = 4
+        max_retries: Optional[int] = None
     ) -> Optional[str]:
         """
         Generate AI-powered comparative analysis of fraud vs safe transactions.
@@ -97,7 +97,7 @@ Top Features:
             fraud_transaction: Feature vector for a fraudulent transaction
             safe_transaction: Feature vector for a safe transaction
             temperature: LLM temperature (lower = more deterministic)
-            max_retries: Number of models to try before giving up
+            max_retries: Number of models to try before giving up (default: all available models)
             
         Returns:
             Human-readable analysis text, or None if all models fail
@@ -122,22 +122,24 @@ Top Features:
             safe_transaction, safe_score
         )
         
-        # Try models with failover
-        for model_name in self.FREE_MODELS[:max_retries]:
+        # Try models with failover (use all models if max_retries not specified)
+        models_to_try = self.FREE_MODELS[:max_retries] if max_retries else self.FREE_MODELS
+        
+        for model_name in models_to_try:
             try:
-                response = self.client.chat.completions.create(
+                response = self.client.models.generate_content(
                     model=model_name,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=temperature
+                    contents=prompt
                 )
+                analysis = response.text
                 print(f"\n✓ Successfully used model: {model_name}")
-                return self._format_response(response.choices[0].message.content)
-                
+                return self._format_response(analysis)
+                        
             except Exception as e:
                 print(f"✗ {model_name} failed, trying next...")
                 continue
         
-        print("✗ All free models failed. Check OpenRouter status or use a paid model.")
+        print("✗ All Google models failed. Please check your Google AI API connection.")
         return None
     
     def _print_transaction_details(
@@ -179,17 +181,72 @@ Amount ${fraud_tx['Amount']:.2f}, V14 {fraud_tx['V14']:.2f}
 SAFE CASE (score {safe_score:.4f}):
 Amount ${safe_tx['Amount']:.2f}, V14 {safe_tx['V14']:.2f}
 
-Explain in plain English why the fraud case is suspicious and how the model caught it.
+Provide a clear, structured analysis using bullet points. Format your response as:
+
+FRAUD CASE ANALYSIS:
+• Key indicator 1: [explanation]
+• Key indicator 2: [explanation]
+• How model detected it: [explanation]
+
+SAFE CASE ANALYSIS:
+• Why it's safe: [explanation]
+• Key differences from fraud case: [explanation]
+
+SUMMARY:
+• [Brief conclusion]
+
+Use bullet points (•) for each point. Keep explanations concise and focused.
         """.strip()
     
     def _format_response(self, text: str, width: int = 80) -> str:
-        """Format LLM response with word wrapping."""
-        return textwrap.fill(
-            text,
-            width=width,
-            break_long_words=False,
-            break_on_hyphens=False
-        )
+        """Format LLM response preserving structure and line breaks."""
+        lines = text.split('\n')
+        formatted_lines = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                formatted_lines.append('')
+                continue
+            
+            # If line is already a bullet point or starts with special chars, preserve it
+            if line.startswith(('•', '-', '*', '#', '**')) or line.startswith(('1.', '2.', '3.', '4.', '5.')):
+                # Wrap long bullet points but preserve the bullet
+                if len(line) > width:
+                    # Find the bullet/prefix
+                    prefix = ''
+                    content = line
+                    for prefix_char in ['•', '-', '*']:
+                        if line.startswith(prefix_char):
+                            prefix = prefix_char + ' '
+                            content = line[len(prefix_char):].strip()
+                            break
+                    
+                    # Wrap the content
+                    wrapped = textwrap.fill(
+                        content,
+                        width=width - len(prefix),
+                        break_long_words=False,
+                        break_on_hyphens=False
+                    )
+                    # Add prefix to first line, indent subsequent lines
+                    wrapped_lines = wrapped.split('\n')
+                    formatted_lines.append(prefix + wrapped_lines[0])
+                    for wrapped_line in wrapped_lines[1:]:
+                        formatted_lines.append(' ' * len(prefix) + wrapped_line)
+                else:
+                    formatted_lines.append(line)
+            else:
+                # Regular text - wrap it
+                wrapped = textwrap.fill(
+                    line,
+                    width=width,
+                    break_long_words=False,
+                    break_on_hyphens=False
+                )
+                formatted_lines.extend(wrapped.split('\n'))
+        
+        return '\n'.join(formatted_lines)
 
 
 def create_agent_from_model_path(
@@ -201,16 +258,17 @@ def create_agent_from_model_path(
     
     Args:
         model_path: Path to saved XGBoost model
-        api_key: OpenRouter API key (reads from env if not provided)
+        api_key: Google AI Studio API key (reads from env if not provided)
         
     Returns:
         Initialized FraudAgent instance
     """
     if api_key is None:
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = os.getenv("GOOGLE_AI_API_KEY")
         if api_key is None:
             raise ValueError(
-                "API key required. Set OPENROUTER_API_KEY env var or pass api_key parameter."
+                "API key required. Set GOOGLE_AI_API_KEY env var or pass api_key parameter.\n"
+                "Get your API key from: https://aistudio.google.com/"
             )
     
     model = joblib.load(model_path)
@@ -222,12 +280,13 @@ if __name__ == "__main__":
     Demo: Run agent analysis on random fraud vs safe cases.
     """
     # Load API key from environment
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv("GOOGLE_AI_API_KEY")
     if not api_key:
         raise ValueError(
-            "OPENROUTER_API_KEY not found in environment variables.\n"
-            "Set it with: export OPENROUTER_API_KEY='your-key-here'\n"
-            "Or add it to your .env file"
+            "GOOGLE_AI_API_KEY not found in environment variables.\n"
+            "Set it with: export GOOGLE_AI_API_KEY='your-key-here'\n"
+            "Or add it to your .env file\n"
+            "Get your API key from: https://aistudio.google.com/"
         )
     
     # Load model

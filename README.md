@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Authors:** Cristian Perera & Ash Dehghan Ph.D.
+> **Author:** Cristian Perera  
 > **Date:** November 2025  
 > **Project:** Google Agents Intensive Capstone
 
@@ -32,32 +32,32 @@ This project bridges the gap between **machine learning accuracy** and **human i
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   Fraud Detection System                 │
+│                   Fraud Detection System                |
 ├─────────────────────────────────────────────────────────┤
-│                                                           │
-│  ┌───────────────┐         ┌──────────────────┐        │
-│  │  Transaction  │────────>│  XGBoost Model   │        │
-│  │     Data      │         │  (0.9886 AUC)    │        │
-│  └───────────────┘         └──────────────────┘        │
-│                                     │                    │
-│                                     v                    │
+│                                                         |
+│  ┌───────────────┐         ┌──────────────────┐         │
+│  │  Transaction  │────────>│  XGBoost Model   │         │
+│  │     Data      │         │  (0.9886 AUC)    │         │
+│  └───────────────┘         └──────────────────┘         │
+│                                     │                   │
+│                                     v                   │
 │                            ┌─────────────────┐          │
 │                            │ Fraud Score     │          │
 │                            │ + Risk Level    │          │
 │                            └─────────────────┘          │
-│                                     │                    │
-│                                     v                    │
+│                                     │                   │
+│                                     v                   │
 │                            ┌─────────────────┐          │
 │                            │   LLM Agent     │          │
 │                            │ (OpenRouter)    │          │
 │                            └─────────────────┘          │
-│                                     │                    │
-│                                     v                    │
+│                                     │                   │
+│                                     v                   │
 │                            ┌─────────────────┐          │
 │                            │  Plain English  │          │
 │                            │  Explanation    │          │
 │                            └─────────────────┘          │
-│                                                           │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
