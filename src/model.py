@@ -3,9 +3,10 @@ XGBoost Fraud Detection Model Training & Evaluation
 ====================================================
 Handles model training, evaluation, and persistence for credit card fraud detection.
 
-Author: Cristian Perera
+Authors: Cristian Perera, Ash Dehghan Ph.D
 Date: November 2025
 """
+
 
 import pandas as pd
 import joblib
@@ -13,12 +14,12 @@ import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 from pathlib import Path
 from typing import Tuple, Optional
+import os # <-- ADDED: Necessary for path manipulation
 
 
 class FraudDetectionModel:
     """
     Production-grade XGBoost model for credit card fraud detection.
-    
     Achieves 0.9886 AUC on the Kaggle Credit Card Fraud Detection dataset
     through careful handling of extreme class imbalance (173:1 ratio).
     """
@@ -52,7 +53,8 @@ class FraudDetectionModel:
         Returns:
             Tuple of (X_train, y_train, X_test, y_test)
         """
-        df = pd.read_csv(data_path)
+        # This is the line that previously failed (now called with a corrected path)
+        df = pd.read_csv(data_path) 
         print(f"Loaded {len(df):,} transactions | {df['Class'].sum()} frauds")
         
         # Calculate train size from percentage
@@ -118,14 +120,14 @@ class FraudDetectionModel:
         print("OVERFITTING CHECK")
         print("=" * 60)
         print(f"Train AUC: {metrics['train_auc']:.4f}")
-        print(f"Test AUC:  {metrics['test_auc']:.4f}")
-        print(f"Gap:       {metrics['overfitting_gap']:.4f}")
+        print(f"Test AUC:  {metrics['test_auc']:.4f}")
+        print(f"Gap:       {metrics['overfitting_gap']:.4f}")
         
         gap = metrics['overfitting_gap']
         if gap < 0.01:
             print("✅ Minimal overfitting - model generalizes well!")
         elif gap < 0.02:
-            print("⚠️  Slight overfitting - still acceptable")
+            print("⚠️  Slight overfitting - still acceptable")
         else:
             print("❌ Significant overfitting detected")
         print("=" * 60 + "\n")
@@ -188,5 +190,16 @@ def train_and_save_model(
 if __name__ == "__main__":
     # Train model when script is run directly
     print("🚀 Starting fraud detection model training...\n")
-    model = train_and_save_model()
+    
+    # --- START FIX FOR FileNotFoundError ---
+    # Calculate the correct, robust data path relative to the script location.
+    # Assumes data is in the parent directory's 'data' folder: ../data/creditcard.csv
+    # This fixes the FileNotFoundError when running from the 'src' directory.
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    CORRECT_DATA_PATH = os.path.join(SCRIPT_DIR, '..', 'data', 'creditcard.csv')
+    
+    # Use the corrected path when calling the training function
+    model = train_and_save_model(data_path=CORRECT_DATA_PATH)
+    # --- END FIX FOR FileNotFoundError ---
+    
     print("\n✅ Training complete!")

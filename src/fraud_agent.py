@@ -30,12 +30,12 @@ class FraudAgent:
     # Google AI Studio models (in priority order for failover)
     # Note: Model names must include the 'models/' prefix
     FREE_MODELS = [
-        'models/gemini-2.5-flash',                    # Fast, reliable (confirmed available)
-        'models/gemini-2.5-pro-preview-06-05',       # Latest preview (confirmed available)
-        'models/gemini-2.5-pro-preview-05-06',       # Previous preview
-        'models/gemini-2.5-pro-preview-03-25',       # Older preview
-        'models/gemini-1.5-flash',                    # Stable fallback
-        'models/gemini-1.5-pro'                       # More capable fallback
+        'models/gemini-2.5-flash',                     # Fast, reliable (confirmed available)
+        'models/gemini-2.5-pro-preview-06-05',         # Latest preview (confirmed available)
+        'models/gemini-2.5-pro-preview-05-06',         # Previous preview
+        'models/gemini-2.5-pro-preview-03-25',         # Older preview
+        'models/gemini-1.5-flash',                     # Stable fallback
+        'models/gemini-1.5-pro'                        # More capable fallback
     ]
     
     def __init__(self, model, api_key: str):
@@ -154,14 +154,14 @@ Top Features:
         print("TRANSACTION DETAILS")
         print("=" * 80)
         print(f"\n🚨 FRAUD CASE (Score: {fraud_score:.4f})")
-        print(f"   Amount: ${fraud_tx['Amount']:.2f}")
-        print(f"   Time: {fraud_tx['Time']:.0f}s ({fraud_tx['Time']//3600:.0f}h)")
-        print(f"   V14: {fraud_tx['V14']:.2f} | V17: {fraud_tx['V17']:.2f}")
+        print(f"   Amount: ${fraud_tx['Amount']:.2f}")
+        print(f"   Time: {fraud_tx['Time']:.0f}s ({fraud_tx['Time']//3600:.0f}h)")
+        print(f"   V14: {fraud_tx['V14']:.2f} | V17: {fraud_tx['V17']:.2f}")
         
         print(f"\n✅ SAFE CASE (Score: {safe_score:.4f})")
-        print(f"   Amount: ${safe_tx['Amount']:.2f}")
-        print(f"   Time: {safe_tx['Time']:.0f}s ({safe_tx['Time']//3600:.0f}h)")
-        print(f"   V14: {safe_tx['V14']:.2f} | V17: {safe_tx['V17']:.2f}")
+        print(f"   Amount: ${safe_tx['Amount']:.2f}")
+        print(f"   Time: {safe_tx['Time']:.0f}s ({safe_tx['Time']//3600:.0f}h)")
+        print(f"   V14: {safe_tx['V14']:.2f} | V17: {safe_tx['V17']:.2f}")
         print("=" * 80)
     
     def _create_analysis_prompt(
@@ -250,7 +250,7 @@ Use bullet points (•) for each point. Keep explanations concise and focused.
 
 
 def create_agent_from_model_path(
-    model_path: str = "models/xgboost_fraud_model.pkl",
+    model_path: Path, # Changed type hint to Path
     api_key: Optional[str] = None
 ) -> FraudAgent:
     """
@@ -271,6 +271,7 @@ def create_agent_from_model_path(
                 "Get your API key from: https://aistudio.google.com/"
             )
     
+    # model_path is now passed as a Path object
     model = joblib.load(model_path)
     return FraudAgent(model, api_key)
 
@@ -279,6 +280,11 @@ if __name__ == "__main__":
     """
     Demo: Run agent analysis on random fraud vs safe cases.
     """
+    # Define script and data paths robustly using pathlib
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    MODEL_PATH = SCRIPT_DIR.parent / "models" / "xgboost_fraud_model.pkl"
+    DATA_PATH = SCRIPT_DIR.parent / "data" / "creditcard.csv"
+    
     # Load API key from environment
     api_key = os.getenv("GOOGLE_AI_API_KEY")
     if not api_key:
@@ -290,10 +296,10 @@ if __name__ == "__main__":
         )
     
     # Load model
-    model = joblib.load("models/xgboost_fraud_model.pkl")
+    model = joblib.load(MODEL_PATH)
     
     # Load test data
-    df = pd.read_csv("data/creditcard.csv")
+    df = pd.read_csv(DATA_PATH)
     test = df.iloc[227845:]
     X_test = test.drop("Class", axis=1)
     y_test = test["Class"]

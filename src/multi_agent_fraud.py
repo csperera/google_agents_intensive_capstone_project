@@ -1,0 +1,223 @@
+"""
+AI-Powered Fraud Detection Multi-Agent System
+============================================
+Divides the prediction, routing, and explanation tasks into specialized agents 
+for enhanced modularity and scalability.
+"""
+
+import pandas as pd
+import textwrap
+from google import genai
+from typing import Dict, Optional, Tuple
+from pathlib import Path
+import os
+import joblib
+from dotenv import load_dotenv
+import sys
+
+# Load environment variables from .env file
+load_dotenv()
+
+
+# --- AGENT 1: PREDICTION AGENT ---
+class PredictionAgent:
+    """Agent responsible for running the trained XGBoost model."""
+    
+    def __init__(self, model):
+        self.model = model
+        
+    def score_transaction(self, transaction: pd.Series) -> Tuple[float, Dict]:
+        """
+        Calculates the fraud probability.
+        
+        Args:
+            transaction: Feature vector (pd.Series) for a single transaction.
+            
+        Returns:
+            Tuple of (fraud probability, transaction data dictionary)
+        """
+        # Ensure the input is in the correct shape for prediction
+        row = transaction.values.reshape(1, -1)
+        prob = self.model.predict_proba(row)[0][1]
+        
+        return prob, transaction.to_dict()
+
+
+# --- AGENT 2: TRIAGE AGENT ---
+class TriageAgent:
+    """Agent responsible for applying business rules to the prediction."""
+    
+    def __init__(self):
+        # Business rules for risk classification
+        self.rules = {
+            'EXTREMELY HIGH': 0.95,
+            'HIGH': 0.70,
+            'MEDIUM': 0.30,
+        }
+        
+    def assess_risk(self, fraud_prob: float) -> Tuple[str, str]:
+        """
+        Determines the risk level and recommended action based on probability.
+        
+        Args:
+            fraud_prob: The fraud probability score from PredictionAgent.
+            
+        Returns:
+            Tuple of (recommended_action, risk_level)
+        """
+        if fraud_prob > self.rules['EXTREMELY HIGH']:
+            risk = "EXTREMELY HIGH"
+            action = "BLOCK IMMEDIATELY"
+        elif fraud_prob > self.rules['HIGH']:
+            risk = "HIGH"
+            action = "ALERT & MANUAL REVIEW"
+        elif fraud_prob > self.rules['MEDIUM']:
+            risk = "MEDIUM"
+            action = "MONITOR CLOSELY"
+        else:
+            risk = "LOW"
+            action = "PASS"
+            
+        return action, risk
+
+
+# --- AGENT 3: EXPLANATION AGENT ---
+class ExplanationAgent:
+    """Agent responsible for generating human-interpretable analysis using an LLM."""
+    
+    FREE_MODELS = [
+        'models/gemini-2.5-flash',
+        'models/gemini-1.5-flash',
+        'models/gemini-1.5-pro'
+    ]
+    
+    def __init__(self, api_key: str):
+        self.client = genai.Client(api_key=api_key)
+
+    def _create_analysis_prompt(
+        self,
+        fraud_tx: Dict,
+        fraud_score: float,
+        action: str,
+        risk: str
+    ) -> str:
+        """Generate prompt for LLM analysis focusing on a single flagged transaction."""
+        return f"""
+You are an elite fraud detection analyst. Your task is to provide a comprehensive justification for the classification.
+
+The XGBoost model flagged this transaction as **{risk}** with a probability score of {fraud_score:.4f}.
+The recommended action is: **{action}**.
+
+**Transaction Data:**
+- Transaction Amount: ${fraud_tx.get('Amount', 0):.2f}
+- Time Since First Transaction: {fraud_tx.get('Time', 0)//3600:.0f} hours
+- Feature V14 (PCA component): {fraud_tx.get('V14', 0):.2f}
+- Feature V17 (PCA component): {fraud_tx.get('V17', 0):.2f}
+
+Provide a concise, structured analysis using the following mandatory Markdown bullet-point format.
+
+* **Risk Justification:** Explain why the score is {risk} (e.g., extremely high score).
+* **Key Indicators:** Analyze the V14 and V17 values, specifically stating what their extreme values indicate about the fraudulent pattern.
+* **Transaction Profile:** Comment on the Amount and Time profile.
+* **Action Recommendation:** Reiterate and justify the recommended action: {action}.
+"""
+    
+    def generate_analysis(
+        self, 
+        fraud_tx: Dict,
+        fraud_score: float,
+        action: str,
+        risk: str,
+        max_retries: Optional[int] = None
+    ) -> Optional[str]:
+        """
+        Generate AI-powered analysis for a flagged transaction.
+        """
+        prompt = self._create_analysis_prompt(fraud_tx, fraud_score, action, risk)
+        
+        models_to_try = self.FREE_MODELS[:max_retries] if max_retries else self.FREE_MODELS
+        
+        for model_name in models_to_try:
+            try:
+                # Use a low temperature for stable, predictable output
+                config = genai.types.GenerateContentConfig(temperature=0.2)
+                response = self.client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=config
+                )
+                print(f"\n✓ Analysis generated by: {model_name}")
+                return response.text
+                        
+            except Exception as e:
+                print(f"✗ {model_name} failed. Error: {e}")
+                continue
+        
+        return "AI analysis failed after multiple attempts."
+
+
+# --- MAIN PIPELINE EXECUTION ---
+
+if __name__ == "__main__":
+    
+    # 1. Setup and Resource Loading
+    # Path logic is relative to the script's location (e.g., in the 'src' directory)
+    SCRIPT_DIR = Path(__file__).resolve().parent
+    MODEL_PATH = SCRIPT_DIR.parent / "models" / "xgboost_fraud_model.pkl"
+    DATA_PATH = SCRIPT_DIR.parent / "data" / "creditcard.csv"
+    
+    api_key = os.getenv("GOOGLE_AI_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_AI_API_KEY not found. Cannot initialize ExplanationAgent.")
+    
+    try:
+        model = joblib.load(MODEL_PATH)
+        df = pd.read_csv(DATA_PATH)
+        # Use a small test slice for demonstration
+        X_test = df.iloc[227845:].drop("Class", axis=1) 
+        y_test = df.iloc[227845:]["Class"]
+    except FileNotFoundError as e:
+        print(f"Error loading resources: {e}")
+        sys.exit(1)
+
+    # Instantiate Agents
+    prediction_agent = PredictionAgent(model)
+    triage_agent = TriageAgent()
+    explanation_agent = ExplanationAgent(api_key)
+    
+    # Select a highly fraudulent case for demonstration
+    # We select the transaction (iloc[0]) with the highest probability
+    fraud_tx_series = X_test[y_test == 1].iloc[0]
+    
+    print("=" * 70)
+    print("🤖 MULTI-AGENT FRAUD DETECTION PIPELINE COMMENCED")
+    print("=" * 70)
+    
+    # 2. Prediction Agent Execution
+    print("\n[STEP 1: PREDICTION AGENT RUNNING...]")
+    fraud_prob, tx_data = prediction_agent.score_transaction(fraud_tx_series)
+    print(f"   -> XGBoost Score: {fraud_prob:.4f}")
+
+    # 3. Triage Agent Execution
+    print("\n[STEP 2: TRIAGE AGENT RUNNING...]")
+    action, risk = triage_agent.assess_risk(fraud_prob)
+    print(f"   -> Risk Level: {risk}")
+    print(f"   -> Recommended Action: {action}")
+    
+    # 4. Explanation Agent Execution (Only if action is not 'PASS')
+    if action != "PASS":
+        print("\n[STEP 3: EXPLANATION AGENT RUNNING...]")
+        analysis = explanation_agent.generate_analysis(
+            fraud_tx=tx_data, 
+            fraud_score=fraud_prob, 
+            action=action, 
+            risk=risk
+        )
+        
+        print("\n" + "=" * 70)
+        print("💡 FINAL AI AGENT REPORT")
+        print("=" * 70)
+        print(analysis)
+        print("=" * 70)
+    else:
+        print("\n[STEP 3: EXPLANATION AGENT SKIPPED] - Low risk, no report generated.")
