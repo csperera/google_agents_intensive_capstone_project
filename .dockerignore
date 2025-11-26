@@ -1,0 +1,28 @@
+# Dependency folders and cache
+venv
+__pycache__
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Data and Logs
+.coverage
+
+# Git and OS metadata
+.git
+.gitignore
+.DS_Store
+
+# Temporary files and development files
+tmp
+logs
+tests/
+deprecated/
+DEMO_COMMANDS.txt
+Gemini + XGBoost Real-Time Credit Card Fraud Detection Agent (0.9862 AUC) v1.0.ipynb
+PROJECT_STRUCTURE.md
+README.md
+
+# Docker-specific files themselves
+Dockerfile
+docker-compose.yml

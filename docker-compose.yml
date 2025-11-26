@@ -1,0 +1,19 @@
+services:
+  # Define your Streamlit application service
+  streamlit-app:
+    # Use the image you successfully built locally
+    image: fraud-detection-app:latest
+    
+    # Name the container so it's easy to identify and manage
+    container_name: fraud-app
+
+    # Map the container port (8501) to the host port (8501)
+    ports:
+      - "8501:8501"
+
+    # Automatically restart the container if it crashes (useful for production)
+    restart: always
+
+    # Load environment variables from the .env file in the root directory
+    env_file:
+      - .env
