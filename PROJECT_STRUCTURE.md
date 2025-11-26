@@ -22,7 +22,7 @@ google_agents_intensive_capstone_project/
 ├── src/                          ← Source code (main modules)
 │   ├── __init__.py               ← Makes src a Python package
 │   ├── model.py                  ← Model training & evaluation
-│   ├── fraud_agent.py            ← LLM agent + fraud scoring
+│   ├── multi_agent_fraud.py      ← LLM agent + fraud scoring
 │   └── utils.py                  ← Helper functions
 │
 ├── tests/                        ← Unit tests
@@ -146,7 +146,7 @@ tree /F /A
 pytest tests/ -v
 
 # Test a module
-python src/fraud_agent.py
+python src/multi_agent_fraud.py
 
 # Launch Streamlit
 streamlit run streamlit_app/app.py
@@ -165,11 +165,11 @@ cat README.md
 - **Total Test Files**: 4 (conftest.py + 3 test modules)
 - **Total Tests**: 38 tests
 - **Test Pass Rate**: 92% (35/38)
-- **Source Modules**: 3 (model.py, fraud_agent.py, utils.py)
+- **Source Modules**: 3 (model.py, multi_agent_fraud.py, utils.py)
 - **Model Performance**: 0.9886 AUC
 - **Lines of Code**: ~1,000+ lines of production code
 
 ---
 
 *Generated: November 2025*  
-*Author: Cristian Perera*
+*Authors: Ash Dehghan Ph.D and Cristian Perera*
