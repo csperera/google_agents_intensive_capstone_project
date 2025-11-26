@@ -3,7 +3,7 @@ Unit Tests for FraudDetectionModel
 ===================================
 Tests model initialization, training, saving, loading, and predictions.
 
-Author: Cristian Perera
+Authors: Ash Dehghan Ph.D and Cristian Perera
 Date: November 2025
 """
 

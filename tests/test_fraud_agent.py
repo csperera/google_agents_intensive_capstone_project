@@ -3,7 +3,7 @@ Unit Tests for FraudAgent
 ==========================
 Tests fraud scoring tool, LLM integration, and failover logic.
 
-Author: Cristian Perera
+Authors: Ash Dehghan Ph.D and Cristian Perera
 Date: November 2025
 """
 
