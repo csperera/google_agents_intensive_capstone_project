@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Authors:** Ash Dehghan Ph.D & Cristian Perera  
-> **Date:** November 2024  
+> **Date:** November 2025  
 > **Project:** Google Agents Intensive Capstone
 
 ---
@@ -376,3 +376,4 @@ GitHub: [@csperera](https://github.com/csperera)
 ---
 
 *Built with ❤️ for explainable, production-ready fraud detection using multi-agent AI systems*
+
