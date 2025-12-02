@@ -3,7 +3,7 @@ Pytest Configuration and Shared Fixtures
 =========================================
 Provides reusable test data and mock objects for unit tests.
 
-Author: Cristian Perera
+Authors: Ash Dehghan Ph.D and Cristian Perera
 Date: November 2025
 """
 

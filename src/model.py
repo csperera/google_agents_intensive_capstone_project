@@ -67,7 +67,7 @@ class FraudDetectionModel:
         Returns:
             Tuple of (X_train, y_train, X_test, y_test)
         """
-        # Data file path is now dynamic
+        # Data file path is now dynamic DATA INGESTION
         df = pd.read_csv(data_file) 
         print(f"Loaded {len(df):,} total rows | {df[self.target_column].sum()} positive cases")
         

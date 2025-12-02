@@ -3,7 +3,7 @@ Utility Functions for Fraud Detection Pipeline
 ==============================================
 Helper functions for data loading, preprocessing, and visualization.
 
-Author: Cristian Perera
+Authors: Ash Dehghan Ph.D and Cristian Perera
 Date: November 2025
 """
 

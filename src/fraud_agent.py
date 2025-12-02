@@ -3,6 +3,11 @@ AI-Powered Fraud Detection Agent DEPRECATED - Use multi_agent_fraud.py instead
 =================================
 Combines XGBoost predictions with LLM explainability for credit card fraud analysis.
 
+DEPRECATED - Use multi_agent_fraud.py instead DEPRECATED - Use multi_agent_fraud.py instead
+DEPRECATED - Use multi_agent_fraud.py instead DEPRECATED - Use multi_agent_fraud.py instead
+DEPRECATED - Use multi_agent_fraud.py instead DEPRECATED - Use multi_agent_fraud.py instead
+DEPRECATED - Use multi_agent_fraud.py instead DEPRECATED - Use multi_agent_fraud.py instead
+
 Authors: Ash Dehghan Ph.D and Cristian Perera
 Date: November 2025
 """
