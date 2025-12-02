@@ -10,6 +10,8 @@
 > **Date:** November 2025  
 > **Project:** Google Agents Intensive Capstone
 
+[![Click To Watch Demo Video](https://img.shields.io/badge/▶️-Click%20To%20Watch%20Demo%20Video-red?style=for-the-badge&logo=youtube)](https://www.youtube.com/watch?v=mYZa0j5CUow)
+
 ---
 
 ## 🎯 Project Overview
