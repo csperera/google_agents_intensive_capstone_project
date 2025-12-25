@@ -313,7 +313,7 @@ This project is part of the Google Agents Intensive Capstone. Feedback and sugge
 
 ## 📜 License
 
-MIT License - See [LICENSE](LICENSE) for details
+See [LICENSE](LICENSE) for details
 
 ---
 
@@ -378,4 +378,5 @@ GitHub: [@csperera](https://github.com/csperera)
 ---
 
 *Built with ❤️ for explainable, production-ready fraud detection using multi-agent AI systems*
+
 
